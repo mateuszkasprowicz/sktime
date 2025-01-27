@@ -262,6 +262,22 @@ def _get_reduced_path(input_path_string):
     return result_string
 
 
+def _get_link_url_params(base_object):
+    """Get the URL parameters for the API documentation link.
+
+    The function must take an object and return a dictionary with the parameters
+    to be used in the URL template.
+
+    This implements core logic of doc link generation and depends on a link template
+    of a given package. This implementation is for `sktime`. 2nd/3rd party packages
+    have to implement their own version of this function, and point to it through
+    a tag `doc_link_url_param_generator_path`.
+    """
+    modpath = str(base_object.__class__)[8:-2]
+    path_reduced = _get_reduced_path(modpath)
+    return {"path_reduced": path_reduced}
+
+
 class _HTMLDocumentationLinkMixin:
     """Mixin class allowing to generate a link to the API documentation.
 
@@ -281,27 +297,12 @@ class _HTMLDocumentationLinkMixin:
     """
 
     _doc_link_module = "sktime"
-    _doc_link_url_param_generator = None
+    _doc_link_url_param_generator = _get_link_url_params
+    _doc_link_template = "https://www.sktime.net/en/v{version}/api_reference/auto_generated/{path_reduced}.html"  # noqa: E501
 
     def _get_version(self):
         module = importlib.import_module(self._doc_link_module)
         return parse_version(module.__version__).base_version
-
-    @property
-    def _doc_link_template(self):
-        sktime_version = self._get_version()
-        return getattr(
-            self,
-            "__doc_link_template",
-            (
-                f"https://www.sktime.net/en/v{sktime_version}"
-                "/api_reference/auto_generated/{reduced_path}.html"
-            ),
-        )
-
-    @_doc_link_template.setter
-    def _doc_link_template(self, value):
-        setattr(self, "__doc_link_template", value)
 
     def _get_doc_link(self):
         """Generate a link to the API documentation for a given base object.
@@ -319,13 +320,13 @@ class _HTMLDocumentationLinkMixin:
         if self.__class__.__module__.split(".")[0] != self._doc_link_module:
             return ""
 
+        version = self._get_version()
+        # TODO: Implement a reasonable default
         if self._doc_link_url_param_generator is None:
-            modpath = str(self.__class__)[8:-2]
-            reduced_path = _get_reduced_path(modpath)
+            return ""
 
-            return self._doc_link_template.format(reduced_path=reduced_path)
         return self._doc_link_template.format(
-            **self._doc_link_url_param_generator(self)
+            version=version, **self._doc_link_url_param_generator()
         )
 
     @property
